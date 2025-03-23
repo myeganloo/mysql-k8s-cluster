@@ -11,12 +11,13 @@ This document outlines the steps to deploy a MySQL cluster with a single Master,
   ```bash
   kubectl create namespace mysql-ha
 ###Architecture
-Master: mysql-master-0 (server-id=1)
-Slaves: mysql-slave-0 (server-id=2), mysql-slave-1 (server-id=3)
-ProxySQL: Load balancer distributing writes to Master and reads to Slaves
+  - Master: mysql-master-0 (server-id=1)
+  - Slaves: mysql-slave-0 (server-id=2), mysql-slave-1 (server-id=3)
+  - ProxySQL: Load balancer distributing writes to Master and reads to Slaves
 ###Step 1: Deploy MySQL Master
 
-```mysql-master.yml
+mysql-master.yml
+```YAML
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -83,12 +84,13 @@ spec:
   - port: 3306
   selector:
     app: mysql-master
+```
+
 Apply:
 
-bash
-
-
+```bash
 kubectl apply -f mysql-master.yml
+```
 
 ###Step 2: Deploy MySQL Slaves
 ```mysql-slave.yml
