@@ -187,8 +187,9 @@ spec:
 ```
 Apply:
 ``bash
-### kubectl apply -f mysql-slave.yml
-Step 3: Deploy ProxySQL
+kubectl apply -f mysql-slave.yml
+```
+### Step 3: Deploy ProxySQL
 proxysql.yml
 ```yaml
 apiVersion: apps/v1
