@@ -186,7 +186,7 @@ spec:
     app: mysql-slave
 ```
 Apply:
-``bash
+```bash
 kubectl apply -f mysql-slave.yml
 ```
 ### Step 3: Deploy ProxySQL
@@ -243,8 +243,6 @@ Configure Slaves:
 ```
 ### For mysql-slave-0:
 ```bash
-
-
 kubectl exec -it -n mysql-ha mysql-slave-0 -- mysql -u root -prootpass
 ```
 ```sql
@@ -301,7 +299,7 @@ Add user:
 INSERT INTO mysql_users (username, password, default_hostgroup) 
 VALUES ('root', 'rootpass', 10);
 ```
-###Create monitor user on MySQL servers: On Master and Slaves:
+### Create monitor user on MySQL servers: On Master and Slaves:
 ```sql
 CREATE USER 'monitor'@'%' IDENTIFIED BY 'monitor';
 GRANT SELECT, REPLICATION CLIENT ON *.* TO 'monitor'@'%';
@@ -334,9 +332,9 @@ kubectl exec -it -n mysql-ha mysql-slave-0 -- mysql -u root -prootpass -e "SELEC
 kubectl exec -it -n mysql-ha mysql-slave-0 -- mysql -u root -prootpass -h proxysql.mysql-ha.svc.cluster.local -P 3306 -e "SELECT * FROM test_db.test_table"
 ```
 ### Troubleshooting
-CrashLoopBackOff: Check logs with kubectl logs -n mysql-ha <pod-name>.
-Replication errors: Use SHOW SLAVE STATUS\G on Slaves.
-ProxySQL timeouts: Verify mysql_servers and stats_mysql_connection_pool:
+ - CrashLoopBackOff: Check logs with kubectl logs -n mysql-ha <pod-name>.
+ - Replication errors: Use SHOW SLAVE STATUS\G on Slaves.
+ - ProxySQL timeouts: Verify mysql_servers and stats_mysql_connection_pool:
 ```sql
 SELECT * FROM mysql_servers;
 SELECT * FROM stats_mysql_connection_pool;
