@@ -10,12 +10,11 @@ This document outlines the steps to deploy a MySQL cluster with a single Master,
 - Namespace `mysql-ha` created:
   ```bash
   kubectl create namespace mysql-ha
-###Architecture
+### Architecture
   - Master: mysql-master-0 (server-id=1)
   - Slaves: mysql-slave-0 (server-id=2), mysql-slave-1 (server-id=3)
   - ProxySQL: Load balancer distributing writes to Master and reads to Slaves
-###Step 1: Deploy MySQL Master
-
+### Step 1: Deploy MySQL Master
 mysql-master.yml
 ```YAML
 apiVersion: apps/v1
@@ -92,11 +91,9 @@ Apply:
 kubectl apply -f mysql-master.yml
 ```
 
-###Step 2: Deploy MySQL Slaves
-```mysql-slave.yml
-yaml
-
-
+### Step 2: Deploy MySQL Slaves
+mysql-slave.yml
+```yaml
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -187,17 +184,13 @@ spec:
   - port: 3306
   selector:
     app: mysql-slave
+```
 Apply:
-
-bash
-
-
-kubectl apply -f mysql-slave.yml
+``bash
+### kubectl apply -f mysql-slave.yml
 Step 3: Deploy ProxySQL
 proxysql.yml
-yaml
-
-
+```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -230,33 +223,30 @@ spec:
     targetPort: 6033
   selector:
     app: proxysql
+```
 Apply:
-
-bash
-
-
+```bash
 kubectl apply -f proxysql.yml
-Step 4: Configure Replication
-Set up replication user on Master:
-bash
-
+```
+### Step 4: Configure Replication
+#### Set up replication user on Master:
+```bash
 
 kubectl exec -it -n mysql-ha mysql-master-0 -- mysql -u root -prootpass
-sql
-
-
+```
+```sql
 CREATE USER 'repl_user'@'%' IDENTIFIED WITH 'mysql_native_password' BY 'repl_pass';
 GRANT REPLICATION SLAVE ON *.* TO 'repl_user'@'%';
 FLUSH PRIVILEGES;
 Configure Slaves:
-For mysql-slave-0:
-bash
+```
+### For mysql-slave-0:
+```bash
 
 
 kubectl exec -it -n mysql-ha mysql-slave-0 -- mysql -u root -prootpass
-sql
-
-
+```
+```sql
 CHANGE MASTER TO 
     MASTER_HOST = 'mysql-master-0.mysql-master.mysql-ha.svc.cluster.local',
     MASTER_USER = 'repl_user',
@@ -264,14 +254,13 @@ CHANGE MASTER TO
     MASTER_AUTO_POSITION = 1;
 START SLAVE;
 SHOW SLAVE STATUS\G
+```
 For mysql-slave-1:
-bash
-
+```bash
 
 kubectl exec -it -n mysql-ha mysql-slave-1 -- mysql -u root -prootpass
-sql
-
-
+```
+```sql
 CHANGE MASTER TO 
     MASTER_HOST = 'mysql-master-0.mysql-master.mysql-ha.svc.cluster.local',
     MASTER_USER = 'repl_user',
@@ -279,91 +268,79 @@ CHANGE MASTER TO
     MASTER_AUTO_POSITION = 1;
 START SLAVE;
 SHOW SLAVE STATUS\G
-Fix root password on Slaves (if initialized without password):
-bash
-
-
+```
+### Fix root password on Slaves (if initialized without password):
+```bash
 kubectl exec -it -n mysql-ha mysql-slave-0 -- mysql -u root
-sql
-
-
+```
+```sql
 ALTER USER 'root'@'localhost' IDENTIFIED BY 'rootpass';
 FLUSH PRIVILEGES;
 Repeat for mysql-slave-1.
-Step 5: Configure ProxySQL
+```
+###Step 5: Configure ProxySQL
 Access ProxySQL:
-bash
-
-
+```bash
 kubectl exec -it -n mysql-ha $(kubectl get pod -n mysql-ha -l app=proxysql -o jsonpath="{.items[0].metadata.name}") -- mysql -u admin -padmin -h 127.0.0.1 -P 6032
+```
 Add servers:
-sql
-
-
+```sql
 INSERT INTO mysql_servers (hostgroup_id, hostname, port) 
 VALUES (10, 'mysql-master-0.mysql-master.mysql-ha.svc.cluster.local', 3306),
        (20, 'mysql-slave-0.mysql-slave.mysql-ha.svc.cluster.local', 3306),
        (20, 'mysql-slave-1.mysql-slave.mysql-ha.svc.cluster.local', 3306);
 Set replication hostgroups:
-sql
 
-
+```sql
 INSERT INTO mysql_replication_hostgroups (writer_hostgroup, reader_hostgroup, comment) 
 VALUES (10, 20, 'mysql-replication');
+```
 Add user:
-sql
-
-
+```sql
 INSERT INTO mysql_users (username, password, default_hostgroup) 
 VALUES ('root', 'rootpass', 10);
-Create monitor user on MySQL servers: On Master and Slaves:
-sql
-
-
+```
+###Create monitor user on MySQL servers: On Master and Slaves:
+```sql
 CREATE USER 'monitor'@'%' IDENTIFIED BY 'monitor';
 GRANT SELECT, REPLICATION CLIENT ON *.* TO 'monitor'@'%';
 FLUSH PRIVILEGES;
+```
 Apply changes:
-sql
-
-
+```sql
 LOAD MYSQL SERVERS TO RUNTIME;
 LOAD MYSQL USERS TO RUNTIME;
 SAVE MYSQL SERVERS TO DISK;
 SAVE MYSQL USERS TO DISK;
-Step 6: Test the Setup
+```
+### Step 6: Test the Setup
 Test replication: On Master:
-bash
-
-
+```bash
 kubectl exec -it -n mysql-ha mysql-master-0 -- mysql -u root -prootpass
-sql
-
-
+```
+```sql
 CREATE DATABASE test_db;
 USE test_db;
 CREATE TABLE test_table (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(50));
 INSERT INTO test_table (name) VALUES ('test1');
-Check on Slaves:
-bash
-
-
+```
+### Check on Slaves:
+```bash
 kubectl exec -it -n mysql-ha mysql-slave-0 -- mysql -u root -prootpass -e "SELECT * FROM test_db.test_table"
-Test ProxySQL:
-bash
-
-
+```
+### Test ProxySQL:
+```bash
 kubectl exec -it -n mysql-ha mysql-slave-0 -- mysql -u root -prootpass -h proxysql.mysql-ha.svc.cluster.local -P 3306 -e "SELECT * FROM test_db.test_table"
-Troubleshooting
+```
+### Troubleshooting
 CrashLoopBackOff: Check logs with kubectl logs -n mysql-ha <pod-name>.
 Replication errors: Use SHOW SLAVE STATUS\G on Slaves.
 ProxySQL timeouts: Verify mysql_servers and stats_mysql_connection_pool:
-sql
-
-
+```sql
 SELECT * FROM mysql_servers;
 SELECT * FROM stats_mysql_connection_pool;
-Next Steps
-Security: Use Kubernetes Secrets for passwords.
-Monitoring: Deploy Prometheus and Grafana with MySQL Exporter.
-Backup: Implement a backup strategy.
+```
+### Next Steps
+    - Security: Use Kubernetes Secrets for passwords.
+    - Monitoring: Deploy Prometheus and Grafana with MySQL Exporter.
+    - Backup: Implement a backup strategy.
